@@ -1,0 +1,101 @@
+  version: '3.9'
+  services :
+    # WordPress Container.
+    wordpress:
+      # Choose the image version with the PHP version you are looking for (https://hub.docker.com/_/wordpress).
+      image: wordpress:php7.4-apache
+      # Start container automatically.
+      restart: always
+      # Expose ports 80 and 443 to other containers for the reverse proxy
+      expose:
+        - 80
+        - 443
+      # Set environment variables
+      environment:
+        WORDPRESS_DB_HOST: db
+        WORDPRESS_DB_USER: wp
+        WORDPRESS_DB_PASSWORD: secret
+        WORDPRESS_DB_NAME: wp
+        WORDPRESS_DEBUG: 1
+      # Create container volumes. If you run into permissions issues, run `sudo chown -R 1000:1000 /path/to/volume` from your host machine.
+      volumes:
+        # Shared volume to read logs
+        - ./logs:/var/log
+        # Shared volume for source code
+        - ./wordpress:/var/www/html
+    # MySQL database container
+    db:
+      # Choose the image version you are looking for (https://hub.docker.com/_/mysql).
+      image: mysql:5.7
+      # Start container automatically.
+      restart: always
+      # Bind port 33306 externally to port 3306 internally for DB management with MySqlWorkbench or other client.
+      ports:
+        - "33306:3306"
+      # Set environment variables
+      environment :
+        - MYSQL_DATABASE=wp
+        - MYSQL_USER=wp
+        - MYSQL_PASSWORD=secret
+        - MYSQL_ROOT_PASSWORD=secret
+      # Create container volume. If you run into permissions issues, run `sudo chown -R 1000:1000 /path/to/volume` from your host machine.
+      volumes:
+        - ./db:/var/lib/mysql
+    # Adminer MySQL client container
+    adminer:
+      # Choose image.
+      image: adminer:latest
+      # Start container automatically.
+      restart: always
+      # Bind port 8080 externally to port 8080 internally for DB management with web-based client.
+      ports:
+        - "8080:8080"
+      # Expose ports 80 and 443 to other containers for the reverse proxy
+      expose:
+        - 80
+        - 443
+      # Set environment variables
+      environment:
+        - UPLOAD=4096M
+    # Reverse proxy container. You could use Nginx or something else, but Caddy is really simple.
+    caddy:
+      # Choose image.
+      image: caddy:latest
+      # Start container automatically.
+      restart: unless-stopped
+      # Bind ports to listen for http and https on localhost
+      ports:
+        - "80:80"
+        - "443:443"
+        - "443:443/udp"
+      # Create container volumes.
+      volumes:
+        - $PWD/Caddyfile:/etc/caddy/Caddyfile
+        - $PWD/site:/srv
+        - caddy_data:/data
+        - caddy_config:/config
+    # WP-CLI container
+    wp-cli:
+      # Choose image.
+      image: wordpress:cli
+      # Make sure WP and DB are available first
+      depends_on:
+        - db
+        - wordpress
+      # Create container volumes.
+      volumes:
+        - ./wordpress:/var/www/html:delegated
+      # Set entrypoint
+      entrypoint: [ 'wp', '--allow-root' ]
+      # Set environment variables
+      environment:
+        WORDPRESS_DB_HOST: db
+        WORDPRESS_DB_USER: wp
+        WORDPRESS_DB_PASSWORD: secret
+        WORDPRESS_DB_NAME: wp
+  
+  volumes:
+    caddy_data:
+    caddy_config:
+#    wordpress:
+#    db:
